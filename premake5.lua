@@ -8,13 +8,12 @@ VULKAN_SDK_PATH = os.getenv("VK_SDK_PATH")
 
 if os.istarget "windows" then
     GLSLC = VULKAN_SDK_PATH .. "/Bin/glslc.exe"
-	CMAKE = ('"'..os.capture("where cmake")..'"') or path.join(os.getenv("CMAKE_PATH"), "cmake")
-	-- print(CMAKE)
-	OBJCOPY = "%{wks.location}/vendor/bin/binutils-x64/objcopy.exe"
-    UTF_BOM_REMOVE = "%{wks.location}/vendor/bin/utf-bom-utils/Debug/bom_remove.exe"
+	--CMAKE = ('"'..os.capture("where cmake")..'"') or path.join(os.getenv("CMAKE_PATH"), "cmake")
+	--OBJCOPY = "%{wks.location}/vendor/bin/binutils-x64/objcopy.exe"
+    --UTF_BOM_REMOVE = "%{wks.location}/vendor/bin/utf-bom-utils/Debug/bom_remove.exe"
 else
-	CMAKE = "cmake"
-	OBJCOPY = "objcopy"
+	--CMAKE = "cmake"
+	--OBJCOPY = "objcopy"
 end
 
 project "VulkanTest"
@@ -31,6 +30,9 @@ project "VulkanTest"
         "%{prj.location}/src/**.hpp",
         "%{prj.location}/src/**.cpp",
         
+        "%{wks.location}/dependencies/stb_image/stb_image.h",
+        "%{wks.location}/dependencies/stb_image/stb_image.cpp",
+
         "%{prj.location}/shaders/**.vert",
         "%{prj.location}/shaders/**.frag",
     }
@@ -38,6 +40,7 @@ project "VulkanTest"
     includedirs {
         "%{wks.location}/dependencies/glm",
         "%{wks.location}/dependencies/GLFW/include",
+        "%{wks.location}/dependencies/stb_image",
         "%{VULKAN_SDK_PATH}/Include",
     }
 
@@ -65,13 +68,13 @@ project "VulkanTest"
     filter "files:**.vert or **.frag"
         buildmessage "Compiling shader %{file.name}"
         buildcommands {
-            "%{GLSLC} %{file.relpath} -o %{cfg.objdir}/%{file.name}.spv",
+            "%{GLSLC} %{file.relpath} -o %{cfg.targetdir}/%{file.name}.spv",
 
         --    "%{UTF_BOM_REMOVE} %{file.relpath}",
 		--	"%{OBJCOPY} --input-target binary --output-target pe-x86-64 --binary-architecture i386 %{cfg.objdir}/%{file.name}.spv %{cfg.objdir}/%{file.name}.obj",
 		--	"{ECHO} Created %{cfg.objdir}/%{file.basename}.obj from %{file.relpath}"
         }
         buildoutputs {
-            "%{cfg.objdir}/%{file.name}.spv",
+            "%{cfg.targetdir}/%{file.name}.spv",
         --    "%{cfg.objdir}/%{file.name}.obj"
         }
