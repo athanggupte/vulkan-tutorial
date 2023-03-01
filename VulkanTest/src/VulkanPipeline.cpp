@@ -1,10 +1,10 @@
 ﻿#include "VulkanPipeline.h"
 
+#include "BufferData.h"
+#include "VulkanFunctions.h"
+
 #include <fstream>
 #include <optional>
-#include <vulkan/vulkan_core.h>
-
-#include "VulkanFunctions.h"
 
 namespace detail
 {
@@ -21,11 +21,11 @@ namespace detail
 
 	struct VulkanShaderModulePack
 	{
-		VkShaderModule vertShader;
-		VkShaderModule fragShader;
-		VkShaderModule geomShader;
-		VkShaderModule tessContShader;
-		VkShaderModule tessEvalShader;
+		VkShaderModule vertShader{};
+		VkShaderModule fragShader{};
+		VkShaderModule geomShader{};
+		VkShaderModule tessContShader{};
+		VkShaderModule tessEvalShader{};
 
 		uint32_t numStages;
 
@@ -33,8 +33,10 @@ namespace detail
 		{
 			vkDestroyShaderModule(device, vertShader, nullptr);
 			vkDestroyShaderModule(device, fragShader, nullptr);
-
-			// TODO: Handle other shader types here
+			
+			if (geomShader)     vkDestroyShaderModule(device, geomShader, nullptr);
+			if (tessContShader) vkDestroyShaderModule(device, tessContShader, nullptr);
+			if (tessEvalShader) vkDestroyShaderModule(device, tessEvalShader, nullptr);
 		}
 	};
 
@@ -51,20 +53,23 @@ void VulkanPipeline::create(VkDevice device, const std::string& vertex_shader, c
 	shaderStagesDesc.vertShaderFile = vertex_shader;
 	shaderStagesDesc.fragShaderFile = fragment_shader;
 
-	detail::VulkanShaderModulePack shaderModulePack = createShaderModules(device, shaderStagesDesc);
-	std::vector<VkPipelineShaderStageCreateInfo> shaderStagesCreateInfos = createShaderStages(device, shaderModulePack);
+	detail::VulkanShaderModulePack shaderModulePack = detail::createShaderModules(device, shaderStagesDesc);
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStagesCreateInfos = detail::createShaderStages(device, shaderModulePack);
 
 	// Set vertex input definition
 	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo{};
 	vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputStateCreateInfo.vertexBindingDescriptionCount = 0;
-	vertexInputStateCreateInfo.pVertexBindingDescriptions = nullptr;
-	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputStateCreateInfo.pVertexAttributeDescriptions = nullptr;
+
+	auto& bindingDescriptions = Vertex::getBindingDescriptions();
+	auto& attributeDescriptions = Vertex::getAttributeDescriptions();
+
+	vertexInputStateCreateInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescriptions.size());
+	vertexInputStateCreateInfo.pVertexBindingDescriptions = bindingDescriptions.data();
+	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputStateCreateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	// Set up fixed stages of the pipeline
 	// Select dynamic state variables
-#if 0
   	VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo{};
 	dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 
@@ -74,8 +79,6 @@ void VulkanPipeline::create(VkDevice device, const std::string& vertex_shader, c
 	};
 	dynamicStateCreateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
 	dynamicStateCreateInfo.pDynamicStates = dynamicStates.data();
-#endif
-
 
 	// Set the primitive assembly description
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo{};
@@ -83,7 +86,7 @@ void VulkanPipeline::create(VkDevice device, const std::string& vertex_shader, c
 	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
 
-	// Create the viewport
+  	// Create the viewport
 	VkViewport viewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
@@ -116,7 +119,7 @@ void VulkanPipeline::create(VkDevice device, const std::string& vertex_shader, c
 	rasterizationStateCreateInfo.lineWidth = 1.0f; // (lineWidth > 1.0f requires enabling wideLines GPU feature)
 
 	rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
 	rasterizationStateCreateInfo.depthBiasEnable = VK_FALSE; // bias the depth values by a linear transformation of a
 															 // constant value or the slope of the fragment
@@ -140,12 +143,12 @@ void VulkanPipeline::create(VkDevice device, const std::string& vertex_shader, c
 	// Create color blending state for framebuffer attachment
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	colorBlendAttachment.blendEnable = VK_FALSE;
-	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // (optional)
-	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // (optional)
+	colorBlendAttachment.blendEnable = VK_TRUE;
+	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA; // (optional)
+	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // (optional)
 	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // (optional)
-	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // (optional)
-	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // (optional)
+	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA; // (optional)
+	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // (optional)
 	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // (optional)
 
 	// Set global color blend state
@@ -159,6 +162,9 @@ void VulkanPipeline::create(VkDevice device, const std::string& vertex_shader, c
 	colorBlendStateCreateInfo.blendConstants[1] = 0.0f; // (optional)
 	colorBlendStateCreateInfo.blendConstants[2] = 0.0f; // (optional)
 	colorBlendStateCreateInfo.blendConstants[3] = 0.0f; // (optional)
+
+	// Create descriptor sets
+	createDescriptorSetLayout(device);
 
 	// Create a pipeline layout of uniform values
 	createPipelineLayout(device);
@@ -176,7 +182,7 @@ void VulkanPipeline::create(VkDevice device, const std::string& vertex_shader, c
 	pipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
 	pipelineCreateInfo.pDepthStencilState = nullptr; // (optional)
 	pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
-	pipelineCreateInfo.pDynamicState = nullptr; // (optional)
+	pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo; // (optional)
 
 	pipelineCreateInfo.layout = m_PipelineLayout;
 	pipelineCreateInfo.renderPass = render_pass;
@@ -197,16 +203,50 @@ void VulkanPipeline::create(VkDevice device, const std::string& vertex_shader, c
 
 void VulkanPipeline::destroy(VkDevice device)
 {
+	vkDestroyDescriptorSetLayout(device, m_DescriptorSetLayout, nullptr);
 	vkDestroyPipeline(device, m_Pipeline, nullptr);
 	vkDestroyPipelineLayout(device, m_PipelineLayout, nullptr);
+}
+
+
+void VulkanPipeline::createDescriptorSetLayout(VkDevice device)
+{
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	uboLayoutBinding.pImmutableSamplers = nullptr; // (optional) for image samplers
+
+	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+	samplerLayoutBinding.binding = 1;
+	samplerLayoutBinding.descriptorCount = 1;
+	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	samplerLayoutBinding.pImmutableSamplers = nullptr;
+
+	VkDescriptorSetLayoutBinding layoutBindings[] = {
+		uboLayoutBinding,
+		samplerLayoutBinding
+	};
+
+	VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
+	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutCreateInfo.bindingCount = std::size(layoutBindings);
+	layoutCreateInfo.pBindings = layoutBindings;
+
+	if (VK_SUCCESS != vkCreateDescriptorSetLayout(device, &layoutCreateInfo, nullptr, &m_DescriptorSetLayout))
+	{
+		throw std::runtime_error("Failed to create Descriptor Set Layout!");
+	}
 }
 
 void VulkanPipeline::createPipelineLayout(VkDevice device)
 {
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
 	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutCreateInfo.setLayoutCount = 0; // (optional)
-	pipelineLayoutCreateInfo.pSetLayouts = nullptr; // (optional)
+	pipelineLayoutCreateInfo.setLayoutCount = 1;
+	pipelineLayoutCreateInfo.pSetLayouts = &m_DescriptorSetLayout;
 	pipelineLayoutCreateInfo.pushConstantRangeCount = 0; // (optional)
 	pipelineLayoutCreateInfo.pPushConstantRanges = nullptr; // (optional)
 
@@ -238,8 +278,8 @@ std::vector<char> detail::readFile(const std::string& filepath)
 detail::VulkanShaderModulePack detail::createShaderModules(VkDevice device, const ShaderStagesDesc& shader_stages_desc)
 {
 	VulkanShaderModulePack shaderModulePack{};
-	shaderModulePack.vertShader = vulkan::CreateShaderModule(device, readFile(shader_stages_desc.vertShaderFile.value()));
-	shaderModulePack.fragShader = vulkan::CreateShaderModule(device, readFile(shader_stages_desc.fragShaderFile.value()));
+	shaderModulePack.vertShader = vulkan::createShaderModule(device, readFile(shader_stages_desc.vertShaderFile.value()));
+	shaderModulePack.fragShader = vulkan::createShaderModule(device, readFile(shader_stages_desc.fragShaderFile.value()));
 
 	// TODO: Handle other shader types here
 

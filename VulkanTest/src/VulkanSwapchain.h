@@ -11,14 +11,18 @@ public:
 		VkDevice device,
 		VkSurfaceKHR surface,
 		const VulkanSwapchainSupportDetails& swapchain_support_details,
-		const VulkanQueueFamilyIndices& indices,
-		uint32_t window_width, uint32_t window_height
-	);
+		VkSurfaceFormatKHR surfaceFormat,
+		VkPresentModeKHR presentMode,
+		const VkExtent2D& extent,
+		uint32_t imageCount,
+		const VulkanQueueFamilyIndices& indices);
+	void createImageViews(VkDevice device, VkFormat format);
+	void createFramebuffers(VkDevice device, VkRenderPass render_pass, const VkExtent2D& extent);
 
 	void destroy(VkDevice device);
 
 	VkSwapchainKHR m_Swapchain{};
 	std::vector<VkImage> m_Images;
-	VkFormat m_Format{};
-	VkExtent2D m_Extent{};
+	std::vector<VkImageView> m_ImageViews;
+	std::vector<VkFramebuffer> m_Framebuffers;
 };

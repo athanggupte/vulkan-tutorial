@@ -1,6 +1,5 @@
 ﻿#pragma once
 #include <string>
-#include <vector>
 #include <vulkan/vulkan_core.h>
 
 class VulkanPipeline
@@ -10,8 +9,10 @@ public:
 	            render_pass);
 	void destroy(VkDevice device);
 	
+	void createDescriptorSetLayout(VkDevice device);
 	void createPipelineLayout(VkDevice device);
 
+	VkDescriptorSetLayout m_DescriptorSetLayout{};
 	VkPipelineLayout m_PipelineLayout{};
 	VkPipeline m_Pipeline{};
 };

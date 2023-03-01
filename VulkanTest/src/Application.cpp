@@ -4,6 +4,11 @@
 namespace
 {
 	bool s_GlfwInitialized = false;
+
+}
+
+namespace detail {
+	static void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 }
 
 Application::Application(int width, int height, const char* name)
@@ -13,7 +18,7 @@ Application::Application(int width, int height, const char* name)
 
 void Application::run()
 {
-	m_VkContext.initContext(m_AppName, m_Window);
+	m_VulkanContext.initContext(m_AppName, m_Window);
 	mainLoop();
 	shutdown();
 }
@@ -24,9 +29,11 @@ void Application::initWindow()
 		glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	// glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 	m_Window = glfwCreateWindow(m_Width, m_Height, m_AppName, nullptr, nullptr);
+	glfwSetWindowUserPointer(m_Window, &m_VulkanContext);
+	glfwSetFramebufferSizeCallback(m_Window, detail::framebufferResizeCallback);
 }
 
 void Application::mainLoop()
@@ -39,7 +46,7 @@ void Application::mainLoop()
 	while (!glfwWindowShouldClose(m_Window))
 	{
 		glfwPollEvents();
-		m_VkContext.drawFrame();
+		m_VulkanContext.drawFrame();
 
 		double now = glfwGetTime();
 		m_FrameTime = now - previous;
@@ -69,7 +76,15 @@ void Application::mainLoop()
 
 void Application::shutdown()
 {
-	m_VkContext.shutdownContext();
+	m_VulkanContext.shutdownContext();
 	glfwDestroyWindow(m_Window);
 	glfwTerminate();
+}
+
+
+
+void detail::framebufferResizeCallback(GLFWwindow *window, int width, int height)
+{
+	VulkanContext* context = static_cast<VulkanContext*>(glfwGetWindowUserPointer(window));
+	context->handleFramebufferResized(width, height);
 }

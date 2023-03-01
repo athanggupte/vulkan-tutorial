@@ -20,7 +20,7 @@ private:
 	const char* m_AppName = nullptr;
 	int m_Width, m_Height;
 	GLFWwindow* m_Window{};
-	VulkanContext m_VkContext{};
+	VulkanContext m_VulkanContext{};
 
 	size_t m_NumFramesRendered = 0;
 	double m_FrameTime = 0;
